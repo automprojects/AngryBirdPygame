@@ -10,16 +10,19 @@ pygame.init()
 SCREEN_WIDTH = 1400
 SCREEN_HEIGHT = 700
 
-# Colors
-WHITE = (255, 255, 255)
-
 # Initialize the screen
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Angry Birds Showdown")
+pygame.display.set_caption("Angry Birds")
 
 # Load bird images
-player_bird_image = pygame.image.load("angry_bird_pygame/player_bird1.png")  # Replace with actual image
-enemy_bird_image = pygame.image.load("angry_bird_pygame/enemy_bird1.png")    # Replace with actual image
+player_bird_image = pygame.image.load("angry_bird_pygame/Images/player_bird.png")  # Replace path if needed
+enemy_bird_image = pygame.image.load("angry_bird_pygame/Images/enemy_bird.png")    # Replace path if needed 
+
+# Load background image
+background_image = pygame.image.load("angry_bird_pygame/Images/background.png")  # Replace path if needed
+
+# Scale the background image to fit the screen dimensions
+background_image = pygame.transform.scale(background_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
 # Bird class
 class Bird(pygame.sprite.Sprite):
@@ -52,6 +55,10 @@ class Bird(pygame.sprite.Sprite):
         speed = 10
         self.velocity = [speed * math.cos(direction), speed * math.sin(direction)]
 
+    def hit_enemy(self):
+        global score
+        score += 100  # Increase the score by 100 when an enemy is hit
+
 # Button class
 class Button(pygame.sprite.Sprite):
     def __init__(self, x, y, image, action):
@@ -72,16 +79,21 @@ for _ in range(5):
     enemy_bird = Bird(x, y, enemy_bird_image)
     enemy_birds.add(enemy_bird)
 
-# ... (Button and game loop code remains the same)
-# Calculate button positions (top left corner)
+# Calculating button positions 
 button_margin = 10
 button_top = button_margin
 button_left = button_margin
 button_spacing = 5
 
+# Initialize player's score
+score = 0
+
+# Calculate 1 inch offset in pixels (assuming standard DPI of 96)
+score_position = (1260, 80)
+
 # Create buttons
-quit_button_image = pygame.image.load("angry_bird_pygame/quit_button.png")        # Replace with actual image
-refresh_button_image = pygame.image.load("angry_bird_pygame/refresh_button.png")  # Replace with actual image
+quit_button_image = pygame.image.load("angry_bird_pygame/Images/quit_button.png")        # Replace path if needed
+refresh_button_image = pygame.image.load("angry_bird_pygame/Images/refresh_button.png")  # Replace path if needed
 
 quit_button = Button(button_left, button_top, quit_button_image, "quit")
 refresh_button = Button(button_left + quit_button_image.get_width() + button_spacing, button_top, refresh_button_image, "refresh")
@@ -92,6 +104,8 @@ clock = pygame.time.Clock()
 # Initialize game state
 try_again_counter = 0
 max_try_again = 3
+level_cleared = False
+game_over = False
 
 while True:
     for event in pygame.event.get():
@@ -99,6 +113,7 @@ while True:
             pygame.quit()
             sys.exit()
 
+        # ... (Event handling code for buttons and player bird dragging remains the same)
         if event.type == pygame.MOUSEBUTTONDOWN:
             if quit_button.rect.collidepoint(event.pos):
                 # Quit button clicked - exit the game
@@ -117,6 +132,12 @@ while True:
                     enemy_bird = Bird(x, y, enemy_bird_image)
                     enemy_birds.add(enemy_bird)
 
+                # Reset flags
+                level_cleared = False
+                game_over = False
+                try_again_counter = 0
+                score = 0
+
             elif player_bird.rect.collidepoint(event.pos):
                 # Player bird clicked - start dragging
                 player_bird.start_drag()
@@ -125,21 +146,24 @@ while True:
             if player_bird.dragging:
                 # Release the player bird
                 player_bird.end_drag()
+
+                if not hits:
+                    try_again_counter += 1  # Increment try_again_counter when no hits occur
             else:
                 break
 
     # Update enemy bird positions and collisions
     hits = pygame.sprite.spritecollide(player_bird, enemy_birds, True)
+
     if hits:
-        try_again_counter = 0
-    else:
-        try_again_counter += 1
+        for hit_enemy in hits:
+            hit_enemy.hit_enemy()  # Call hit_enemy method to update score and reset enemy position
 
-    if len(enemy_birds) == 0:
-        try_again_counter = 0
-
-    if try_again_counter >= max_try_again:
-        try_again_counter = 0
+    # Reset enemy birds that go out of the screen
+    for enemy_bird in enemy_birds:
+        if enemy_bird.rect.right < 0:
+            enemy_bird.rect.left = SCREEN_WIDTH
+            enemy_bird.rect.top = random.randint(50, SCREEN_HEIGHT - 50)
 
     # Reset player bird to origin position if it goes out of the screen
     if player_bird.rect.left > SCREEN_WIDTH or player_bird.rect.right < 0 or \
@@ -147,8 +171,8 @@ while True:
         player_bird.rect.center = (100, SCREEN_HEIGHT // 2)
         player_bird.velocity = [0, 0]
 
-    # Clear the screen
-    screen.fill(WHITE)
+    # Clear the screen and draw the background
+    screen.blit(background_image, (0, 0))
 
     # Update and draw player bird
     player_bird.update()
@@ -158,13 +182,36 @@ while True:
     enemy_birds.update()
     enemy_birds.draw(screen)
 
+    # Display font
+    font = pygame.font.Font(None, 50)
+
+    # Score font
+    score_font = pygame.font.Font(None, 36)
+
+    # Draw and update player's score
+    score_text = score_font.render(f"Score: {score}", True, (0, 0, 0))
+    screen.blit(score_text, score_position)  # Display score at specified position
+
     # Draw buttons
     screen.blit(quit_button.image, quit_button.rect)
     screen.blit(refresh_button.image, refresh_button.rect)
+
+
+# Display "Level Cleared" if score is 500
+    if score >= 500:
+        level_cleared_text = font.render("LEVEL CLEARED", True, (0, 0, 0))
+        text_rect = level_cleared_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        screen.blit(level_cleared_text, text_rect)
+        level_cleared = True  # Update the level_cleared flag
+
+    # Display "Game Over" if score is 0 after three hits
+    if score == 0 and try_again_counter >= max_try_again:
+        game_over_text = font.render("GAME OVER - REPLAY", True, (0, 0, 0))
+        text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        screen.blit(game_over_text, text_rect)
+        game_over = True  # Update the game_over flag
 
     pygame.display.flip()
     clock.tick(60)
 
 pygame.quit()
-
-
